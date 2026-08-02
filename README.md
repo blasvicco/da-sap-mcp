@@ -1,64 +1,58 @@
 # SAP OData MCP Server
 
-A Model Context Protocol (MCP) server for integrating SAP systems with AI assistants like Claude using OData REST APIs. This server provides tools for connecting to SAP OData services, querying entity sets, executing CRUD operations, and calling OData functions.
+A Model Context Protocol (MCP) server for integrating SAP systems with AI assistants (Claude, n8n, etc.) via SAP OData REST APIs. It exposes tools for service discovery, metadata inspection, entity CRUD, entity-set querying, and OData function imports — and supports both classic SAP NetWeaver Gateway OData and SAP Business One Service Layer (B1S).
 
 ## Features
 
-- **SAP OData Connectivity**: Connect to SAP systems via OData REST APIs
-- **Smart Connection Handling**: Properly handles SAP OData URL structures and 404 responses
-- **Service Discovery**: Automatically discover available OData services via catalog or common service testing
-- **Entity Set Queries**: Query any OData entity set with filtering, sorting, and pagination
-- **CRUD Operations**: Create, Read, Update, and Delete operations on OData entities
-- **Function Imports**: Execute OData function imports and custom functions
-- **CSRF Token Handling**: Automatic CSRF token management for secure operations
-- **Modular Architecture**: Clean, maintainable TypeScript codebase with separation of concerns
+- **SAP OData Connectivity**: Connect to SAP systems via OData REST APIs — no SAP RFC SDK required.
+- **Multiple Auth Drivers**: `basic` (username/password), `token` (bearer/session token, e.g. from an n8n webhook), and `b1s` (SAP Business One Service Layer login).
+- **Per-call Connection Override**: Every tool accepts an optional `connection` object so multi-tenant callers (e.g. n8n, which opens a new MCP session per call) can connect without a separate `sap_connect` step.
+- **Service Discovery**: Finds available OData services via the Gateway catalog service, a common-service probe list, or the B1S service document.
+- **Entity Set Queries**: Filtering, sorting, pagination, field selection, and `$expand`, with automatic validation of `select` fields against cached metadata.
+- **CRUD Operations**: Create, read, update, delete on OData entities.
+- **Function Imports**: Execute OData function imports.
+- **CSRF Token Handling**: Automatic CSRF token fetch/management for mutating requests (basic/token drivers).
+- **Dual Transport**: Stdio (for Claude Desktop) or Streamable HTTP (default — for n8n / remote clients), selected via `MCP_TRANSPORT`.
 
 ## Prerequisites
 
 - **Node.js 18+**
-- **SAP system with OData services enabled**
-- **Network access to SAP OData endpoints**
+- **SAP system with OData services enabled** (NetWeaver Gateway) **or** an SAP Business One Service Layer endpoint
+- **Network access to the SAP OData/Service Layer endpoint**
 - **SAP user credentials with appropriate authorizations**
 
-⚠️ **Advantage**: No SAP RFC SDK installation required! Uses standard HTTP/REST APIs.
+## Project Structure
+
+```
+app/
+├── src/
+│   ├── index.ts              # Entry point — starts CMcpServer
+│   ├── server.ts             # McpServer setup, transport handling, tool registration
+│   ├── client.ts             # CClient — composes the base client + all tool-domain clients
+│   ├── base.client.ts        # ABaseClient — Axios instance, connect/disconnect, error formatting
+│   ├── base.handler.ts       # ABaseHandler — shared connection state across tool handlers
+│   ├── odata.types.ts        # Shared TypeScript types
+│   ├── auth/                 # Auth drivers (basic, token, b1s) + driver factory
+│   └── tools/
+│       ├── mcp.registry.ts   # Registers all tools and routes tool calls to handlers
+│       ├── connection/       # sap_connect, sap_connection_status, sap_disconnect
+│       ├── service/          # sap_services_get, sap_service_metadata_get
+│       ├── entity/           # sap_entity_get/create/update/delete
+│       └── query/            # sap_query_entity_set, sap_call_function
+├── package.json
+└── tsconfig.json
+hub/node/                     # Dockerfiles
+docker-compose.yml            # Local dev container (bind-mounts app/, idles for manual exec)
+```
+
+Each domain follows the same pattern: `schema.ts` (Zod schemas — the actual runtime validation), `handler.ts` (business logic), `client.ts` (SAP HTTP calls), and `definitions/*.ts` (one `Tool` object per MCP tool, used for its description and SDK listing metadata).
 
 ## Installation
 
-### Quick Setup
-
-1. **Create the project:**
 ```bash
-mkdir sap-odata-mcp-server
-cd sap-odata-mcp-server
-mkdir src
-```
-
-2. **Copy the source files** from the artifacts to your `src/` directory:
-   - `src/index.ts` - Entry point
-   - `src/server.ts` - MCP server setup
-   - `src/handlers.ts` - Request handlers
-   - `src/odata-client.ts` - SAP OData client
-   - `src/tool-definitions.ts` - Tool definitions
-   - `src/types.ts` - TypeScript types
-
-3. **Copy configuration files:**
-   - `package.json` - Dependencies and scripts
-   - `tsconfig.json` - TypeScript configuration
-   - `.env.example` - Environment variables template
-
-4. **Install dependencies:**
-```bash
+cd app
 npm install
-```
-
-5. **Configure environment:**
-```bash
-cp .env.example .env
-# Edit .env with your SAP details
-```
-
-6. **Build the project:**
-```bash
+cp .env.dev .env      # or export the variables another way
 npm run build
 ```
 
@@ -66,22 +60,37 @@ npm run build
 
 ### Environment Variables
 
-Create a `.env` file with your SAP system details:
-
 ```bash
-# Required SAP OData Configuration
+# MCP server
+MCP_HOST=localhost
+MCP_PORT=3000
+MCP_TRANSPORT=http          # "stdio" or "http" (default: http)
+
+# SAP connection defaults (all can be overridden per tool call via `connection`)
+SAP_AUTH_DRIVER=basic       # "basic" | "token" | "b1s" (default: basic)
 SAP_BASE_URL=https://your-sap-host:8000/sap/opu/odata/sap/
+
+# basic / b1s drivers
 SAP_USERNAME=your-sap-username
 SAP_PASSWORD=your-sap-password
 
-# Optional Configuration
+# token driver
+SAP_TOKEN=
+SAP_TOKEN_TYPE=Bearer       # or "cookie" to send the token as a Cookie header
+
+# b1s driver
+SAP_B1S_COMPANY_DB=
+
+# Optional
 SAP_CLIENT=100
 SAP_TIMEOUT=30000
-SAP_VALIDATE_SSL=false  # for development with self-signed certificates
+SAP_VALIDATE_SSL=false      # for development with self-signed certificates
 SAP_ENABLE_CSRF=true
 ```
 
-### Claude Desktop Integration
+`SAP_AUTH_DRIVER` is auto-inferred as `b1s` if `SAP_B1S_COMPANY_DB` (or a per-call `companyDB`) is supplied and the driver isn't explicitly set to something else.
+
+### Claude Desktop Integration (stdio)
 
 Add to your Claude Desktop configuration file:
 
@@ -93,8 +102,9 @@ Add to your Claude Desktop configuration file:
   "mcpServers": {
     "sap-odata": {
       "command": "node",
-      "args": ["/full/path/to/your/sap-odata-mcp-server/dist/index.js"],
+      "args": ["/full/path/to/da-sap-mcp/app/dist/index.js"],
       "env": {
+        "MCP_TRANSPORT": "stdio",
         "SAP_BASE_URL": "https://your-sap-host:8000/sap/opu/odata/sap/",
         "SAP_USERNAME": "your-username",
         "SAP_PASSWORD": "your-password",
@@ -106,295 +116,167 @@ Add to your Claude Desktop configuration file:
 }
 ```
 
+### HTTP Transport (default — n8n / remote clients)
+
+With `MCP_TRANSPORT=http` (or unset), the server listens on `http://${MCP_HOST}:${MCP_PORT}/mcp` using the Streamable HTTP transport (POST/GET/DELETE, session tracked via the `MCP-Session-Id` header). Since each n8n tool call may open a fresh session, pass SAP credentials in the `connection` argument of each tool call instead of relying on a prior `sap_connect`.
+
+### Docker (local dev)
+
+```bash
+docker compose up -d --build
+docker compose exec sap-mcp sh    # container idles; run npm commands manually inside
+```
+
+The compose file bind-mounts `./app` into the container, loads env vars from `app/.env.dev`, and joins the external Docker network `da-orb_da_sapot_net`. It does not run `npm install`/`npm start` automatically — exec into the container and run those yourself.
+
 ## Available Tools
 
-### 1. sap_connect
+### Connection
+
+#### `sap_connect`
 Connect to SAP OData service.
 
-**Parameters:**
-- `baseUrl` (required): SAP OData service base URL
-- `username` (required): SAP username
-- `password` (required): SAP password
-- `client` (optional): SAP client number
-- `timeout` (optional): Request timeout in milliseconds (default: 30000)
-- `validateSSL` (optional): Validate SSL certificates (default: true)
-- `enableCSRF` (optional): Enable CSRF token handling (default: true)
+- `baseUrl` (required) — SAP OData service base URL
+- `username`, `password` — required for `basic`/`b1s` drivers
+- `token`, `tokenType` — required for `token` driver (`tokenType` defaults to `Bearer`; use `cookie` to send it as a Cookie header instead)
+- `client` — SAP client number
+- `companyDB` — required for `b1s` driver (SAP Business One company database)
+- `timeout` (default `30000`), `validateSSL` (default `true`), `enableCSRF` (default `true`)
+- `authDriver` — `basic` | `token` | `b1s` (default `basic`)
 
-### 2. sap_services_get
-Get list of available OData services with intelligent discovery.
+#### `sap_connection_status`
+Check current connection status and info (base URL, active auth driver, CSRF state, etc.). No parameters.
 
-### 3. sap_service_metadata_get
-Get metadata for a specific OData service.
+#### `sap_disconnect`
+Disconnect from SAP OData service. No parameters.
 
-**Parameters:**
-- `serviceName` (required): Name of the OData service
+### Service
 
-### 4. sap_query_entity_set
-Query an OData entity set with filtering, sorting, and pagination.
+#### `sap_services_get`
+List available OData services. Tries the Gateway catalog service, then a set of common demo/service names, then (for `b1s`) the Service Layer service document.
 
-**Parameters:**
-- `serviceName` (required): Name of the OData service
-- `entitySet` (required): Name of the entity set
-- `select` (optional): Array of fields to select
-- `filter` (optional): OData filter expression
-- `orderby` (optional): OData orderby expression
-- `top` (optional): Number of records to return
-- `skip` (optional): Number of records to skip
-- `expand` (optional): Navigation properties to expand
+- `connection` (optional) — see [Connection object](#connection-object), for per-call auth
 
-### 5. sap_entity_get
-Get a specific entity by its key values.
+#### `sap_service_metadata_get`
+Get and parse `$metadata` (entity types, properties, function imports) for a service.
 
-**Parameters:**
-- `serviceName` (required): Name of the OData service
-- `entitySet` (required): Name of the entity set
-- `keyValues` (required): Object with key-value pairs for entity keys
+- `serviceName` (required)
+- `connection` (optional)
 
-### 6. sap_entity_create
-Create a new entity in an entity set.
+### Entity
 
-### 7. sap_entity_update
-Update an existing entity.
+All entity tools share this convention for SAP B1S: put the entity name in `serviceName` (e.g. `PurchaseRequests`, `Items`) and leave `entitySet` as `''`. For standard OData, `serviceName` is the service path segment and `entitySet` is the entity set name (e.g. `EmployeeSet`).
 
-### 8. sap_entity_delete
-Delete an entity.
+#### `sap_entity_get`
+Get a single entity by its primary key.
 
-### 9. sap_call_function
-Call an OData function import.
+- `serviceName`, `entitySet` (required)
+- `keyValues` (required) — key-value pairs, e.g. `{ "DocEntry": 30526 }`
+- `connection` (optional)
 
-### 10. sap_connection_status
-Check current SAP OData connection status.
+> Note: the tool description mentions an `expand` parameter for including line items, but the current schema/implementation does not accept one — `$expand` is only supported by `sap_query_entity_set`.
 
-### 11. sap_disconnect
-Disconnect from SAP OData service.
+#### `sap_entity_create`
+Create a new entity. `serviceName`, `entitySet`, `data` (required); `connection` (optional).
 
-## Usage Examples
+#### `sap_entity_update`
+Update an existing entity. `serviceName`, `entitySet`, `keyValues`, `data` (required); `connection` (optional).
 
-### Getting Started with Claude
+#### `sap_entity_delete`
+Delete an entity. `serviceName`, `entitySet`, `keyValues` (required); `connection` (optional).
 
-Once configured, you can interact with SAP using natural language in Claude:
+### Query
 
-#### **Connect to SAP:**
-```
-Connect to SAP OData service at https://sap-host:8000/sap/opu/odata/sap/ using username DEVELOPER and password mypassword
-```
+#### `sap_query_entity_set`
+Query an entity set with filtering, sorting, pagination, and expand.
 
-#### **Discover Available Services:**
-```
-Get list of available OData services
-```
+- `serviceName`, `entitySet` (required — same B1S convention as above)
+- `select` (string[]) — fields to return; strongly recommended to avoid token bloat (invalid fields are stripped with a warning)
+- `filter` — OData `$filter` expression, e.g. `substringof('term',Field)` (not `Field contains value`, which is invalid OData)
+- `orderby`, `top`, `skip`, `expand` (string[]) — navigation properties to expand
+- `connection` (optional)
 
-#### **Get Service Information:**
-```
-Get metadata for service GWSAMPLE_BASIC
-```
+Responses are truncated to 3 records unless `top` is explicitly set.
 
-#### **Query Data:**
-```
-Query BusinessPartnerSet from GWSAMPLE_BASIC, select BusinessPartnerID and CompanyName, top 10
-```
+#### `sap_call_function`
+Call an OData function import (`GET {serviceName}/{functionName}` with URL-encoded parameters).
 
-#### **Advanced Filtering:**
-```
-Query SalesOrderSet from ZSD_SALES_SRV, filter by CreationDate ge datetime'2024-01-01T00:00:00', order by CreationDate desc, top 20
-```
+- `serviceName`, `functionName` (required)
+- `parameters` (optional)
+- `connection` (optional)
 
-#### **Get Specific Records:**
-```
-Get entity from MaterialSet in ZMM_MATERIAL_SRV with key Material = '000000000000000001'
-```
+### Connection object
 
-#### **Create New Records:**
-```
-Create entity in CustomerSet with data: {"CustomerNumber": "1000", "CustomerName": "Test Customer", "Country": "US"}
-```
+Every tool above accepts an optional `connection` object with the same shape as the `sap_connect` parameters (`baseUrl`, `username`, `password`, `token`, `tokenType`, `client`, `companyDB`, `timeout`, `validateSSL`, `enableCSRF`, `authDriver`). If a live connection already exists it's reused; otherwise a fresh client is created for that call from `connection`, falling back to the `SAP_*` environment variables for any field not supplied.
 
-### OData Query Examples
+## Auth Drivers
 
-#### **Filtering:**
+| Driver | Selector | Required fields | Behavior |
+|---|---|---|---|
+| `basic` (default) | `authDriver: "basic"` | `username`, `password` | HTTP Basic auth; optional `sap-client` header; fetches a CSRF token if `enableCSRF` |
+| `token` | `authDriver: "token"` | `token` | `Authorization: <tokenType> <token>` header, or sent as a `Cookie` header if `tokenType` is `"cookie"` |
+| `b1s` | `authDriver: "b1s"`, or auto-inferred when `companyDB` is set | `username`, `password`, `companyDB` | Logs in to the SAP Business One Service Layer `Login` endpoint, tracks the session cookie; no CSRF token is used |
+
+An unrecognized `authDriver` value falls back to `basic` with a console warning.
+
+## OData Query Examples
+
 ```
 $filter=MaterialType eq 'FERT' and CreationDate ge datetime'2024-01-01T00:00:00'
-```
-
-#### **Selecting Fields:**
-```
 $select=Material,MaterialDescription,MaterialType,BaseUnit
-```
-
-#### **Sorting:**
-```
 $orderby=CreationDate desc,Material asc
-```
-
-#### **Pagination:**
-```
 $top=50&$skip=100
-```
-
-#### **Expanding Navigation Properties:**
-```
 $expand=MaterialPlantData,MaterialSalesData
 ```
 
-## SAP System Requirements
-
-### Required SAP Components
-- **SAP NetWeaver 7.0 or higher**
-- **SAP Gateway component activated**
-- **OData services enabled and configured**
-
-### Required SAP Authorizations
-
-The SAP user needs these authorization objects:
-- **S_SERVICE**: Service authorization for OData endpoints
-- **S_ICF**: Internet Communication Framework authorization
-- **S_TCODE**: Transaction authorization for BAPIs (if using function imports)
-
-### Activating OData Services
-
-1. **Transaction SICF**: Activate ICF services at `/sap/opu/odata`
-2. **Transaction /IWFND/MAINT_SERVICE**: Manage and activate OData services
-3. **Transaction /IWFND/GW_CLIENT**: Test OData service calls
-
-## Architecture
-
-### Modular Design
-
-```
-src/
-├── index.ts              # Entry point - starts the server
-├── server.ts             # MCP server setup and request routing
-├── handlers.ts           # Business logic for each tool
-├── odata-client.ts       # SAP OData HTTP client
-├── tool-definitions.ts   # MCP tool schemas
-└── types.ts              # TypeScript type definitions
-```
-
-### Key Features
-
-- **Smart Connection Testing**: Handles SAP's URL structure where base URLs return 404
-- **Service Discovery**: Multiple methods to find available OData services
-- **Error Handling**: Comprehensive error handling with helpful messages
-- **Type Safety**: Full TypeScript support with proper interfaces
-- **CSRF Protection**: Automatic CSRF token management for write operations
-
-## Troubleshooting
-
-### Common Issues
-
-#### **Connection Refused (Network Error)**
-- Verify SAP system is running and accessible
-- Check hostname/port in SAP_BASE_URL
-- Verify firewall settings allow HTTP/HTTPS traffic
-
-#### **401 Unauthorized**
-- Check SAP_USERNAME and SAP_PASSWORD
-- Verify user account is not locked
-- Ensure user has S_SERVICE authorization
-
-#### **403 Forbidden**
-- Check user has required SAP authorizations
-- Verify S_ICF authorization for OData paths
-- Contact SAP administrator for permission review
-
-#### **404 Not Found**
-- This is normal for SAP OData base URLs without service names
-- Verify OData services are activated (SICF transaction)
-- Use service discovery to find available services
-
-#### **SSL Certificate Errors**
-- Set `SAP_VALIDATE_SSL=false` for development
-- Install proper certificates for production
-- Check certificate chain and expiration
-
-### Debug Mode
-
-Enable detailed logging:
-```bash
-DEBUG=axios npm start
-```
-
-### SAP System Verification
-
-1. **Test OData URL in browser**: Navigate to your SAP OData URL
-2. **Check service activation**: Transaction SICF → `/sap/opu/odata`
-3. **Verify gateway services**: Transaction /IWFND/MAINT_SERVICE
-4. **Test with gateway client**: Transaction /IWFND/GW_CLIENT
-
-## Security Best Practices
-
-### Production Deployment
-
-- **Use HTTPS** for all SAP OData connections
-- **Store credentials securely** - never hardcode passwords
-- **Create dedicated service users** with minimal required permissions
-- **Enable CSRF protection** for write operations
-- **Implement proper authorization** in SAP for OData services
-- **Monitor access logs** and set up alerting
-- **Regular security audits** of user permissions
-
-### Network Security
-
-- **Use VPN or private networks** for SAP access
-- **Implement IP restrictions** where possible
-- **Enable SAP Gateway security** features
-- **Use proper certificate management**
-
-## Common SAP OData Services
-
-### Standard SAP Services
-- **GWSAMPLE_BASIC** - Basic sample service for testing
-- **GWDEMO** - Comprehensive demo service
-- **RMTSAMPLEFLIGHT** - Flight booking demo
-
-### Business Services
-- **API_MATERIAL_SRV** - Material Management
-- **API_BUSINESS_PARTNER** - Business Partner Management
-- **API_SALES_ORDER_SRV** - Sales Order Management
-- **API_PURCHASEORDER_PROCESS_SRV** - Purchase Order Processing
-
-### Entity Sets by Module
-- **MM (Materials Management)**: MaterialSet, MaterialPlantDataSet
-- **SD (Sales & Distribution)**: SalesOrderSet, CustomerSet, PricingConditionSet
-- **FI (Financial Accounting)**: GeneralLedgerEntrySet, AccountingDocumentSet
-- **HR (Human Resources)**: EmployeeSet, OrganizationalUnitSet
+Substring matching: `substringof('term',Field)` — combine with `or`/`and` as needed (see `sap_query_entity_set` description above).
 
 ## Development
 
-### Available Scripts
-
 ```bash
-# Build TypeScript
-npm run build
-
-# Start production server
-npm start
-
-# Development mode with auto-reload
-npm run dev
-
-# Code quality
-npm run lint
-npm run format
+cd app
+npm run dev      # tsx src/index.ts — run from source with auto-reload behavior
+npm run build    # tsc && tsc-alias → dist/
+npm start        # node dist/index.js
+npm test         # jest
+npm run lint      # eslint . --ext .ts
+npm run format    # prettier --write **.ts
 ```
 
-### Adding New Features
+### Adding a New Tool
 
-1. **Add tool definition** in `tool-definitions.ts`
-2. **Implement handler** in `handlers.ts`
-3. **Add route** in `server.ts` switch statement
-4. **Update types** in `types.ts` if needed
-5. **Build and test**
+1. Add the field(s) to the domain's `schema.ts` (Zod — this is what's actually validated).
+2. Add a `Tool` definition in `definitions/` (name + description + JSON-Schema, used for the SDK listing).
+3. Register the tool's name/schema pair in `toolSchemas` in `src/server.ts`.
+4. Implement the handler method in the domain's `handler.ts` and the SAP call in its `client.ts`.
+5. Wire the tool name to the handler method in `src/tools/mcp.registry.ts`.
 
-## Contributing
+See [STANDARDS.md](STANDARDS.md) for naming and style conventions (class-name role prefixes, `@/*` import aliases, method ordering, etc.).
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes with proper TypeScript types
-4. Test with a real SAP system
-5. Submit a pull request
+## Troubleshooting
+
+#### **401 Unauthorized**
+Check credentials/token, driver selection (`SAP_AUTH_DRIVER`), and that the account isn't locked.
+
+#### **403 Forbidden**
+Check SAP authorizations (`S_SERVICE`, `S_ICF`) for the OData path.
+
+#### **404 on the base URL**
+Expected for many SAP OData root URLs — the client treats this as a valid "connected" response. If a specific service/entity set 404s, verify the name via `sap_services_get` / `sap_service_metadata_get`.
+
+#### **HTTP 400 "Unrecognized resource path" (B1S)**
+Usually means `entitySet` was set to a non-empty value — for B1S it must be `''`, with the entity name in `serviceName`.
+
+#### **SSL Certificate Errors**
+Set `SAP_VALIDATE_SSL=false` for development; use valid certificates in production.
+
+## Known Gaps
+
+- `package.json` declares `"license": "MIT"` and lists a `LICENSE` file, but no `LICENSE` file currently exists in the repo.
+- `sap_entity_get`'s description references an `expand` parameter that isn't implemented — see the note under [`sap_entity_get`](#sap_entity_get).
+- `CQuery` implements a `callAction` (POST) method in `src/tools/query/client.ts` that isn't exposed as an MCP tool.
+- `hub/node/Dockerfile` references a `yarn.lock` that doesn't exist in the repo (the project uses `package-lock.json`, which is gitignored) and isn't wired into `docker-compose.yml`; the compose file uses `hub/node/Dockerfile.local` instead, which is a bare dev shell with no dependency install or `CMD`.
 
 ## License
 
-MIT License - see LICENSE file for details.
-
+MIT (per `package.json`) — no `LICENSE` file is currently present in the repository; add one before treating this as a formally MIT-licensed release.
