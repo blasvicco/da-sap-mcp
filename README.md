@@ -70,7 +70,7 @@ Create a `.env` file with your SAP system details:
 
 ```bash
 # Required SAP OData Configuration
-SAP_ODATA_BASE_URL=https://your-sap-host:8000/sap/opu/odata/sap/
+SAP_BASE_URL=https://your-sap-host:8000/sap/opu/odata/sap/
 SAP_USERNAME=your-sap-username
 SAP_PASSWORD=your-sap-password
 
@@ -85,7 +85,7 @@ SAP_ENABLE_CSRF=true
 
 Add to your Claude Desktop configuration file:
 
-**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`  
+**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 **Windows**: `%APPDATA%/Claude/claude_desktop_config.json`
 
 ```json
@@ -95,7 +95,7 @@ Add to your Claude Desktop configuration file:
       "command": "node",
       "args": ["/full/path/to/your/sap-odata-mcp-server/dist/index.js"],
       "env": {
-        "SAP_ODATA_BASE_URL": "https://your-sap-host:8000/sap/opu/odata/sap/",
+        "SAP_BASE_URL": "https://your-sap-host:8000/sap/opu/odata/sap/",
         "SAP_USERNAME": "your-username",
         "SAP_PASSWORD": "your-password",
         "SAP_CLIENT": "100",
@@ -120,10 +120,10 @@ Connect to SAP OData service.
 - `validateSSL` (optional): Validate SSL certificates (default: true)
 - `enableCSRF` (optional): Enable CSRF token handling (default: true)
 
-### 2. sap_get_services
+### 2. sap_services_get
 Get list of available OData services with intelligent discovery.
 
-### 3. sap_get_service_metadata
+### 3. sap_service_metadata_get
 Get metadata for a specific OData service.
 
 **Parameters:**
@@ -142,7 +142,7 @@ Query an OData entity set with filtering, sorting, and pagination.
 - `skip` (optional): Number of records to skip
 - `expand` (optional): Navigation properties to expand
 
-### 5. sap_get_entity
+### 5. sap_entity_get
 Get a specific entity by its key values.
 
 **Parameters:**
@@ -150,13 +150,13 @@ Get a specific entity by its key values.
 - `entitySet` (required): Name of the entity set
 - `keyValues` (required): Object with key-value pairs for entity keys
 
-### 6. sap_create_entity
+### 6. sap_entity_create
 Create a new entity in an entity set.
 
-### 7. sap_update_entity
+### 7. sap_entity_update
 Update an existing entity.
 
-### 8. sap_delete_entity
+### 8. sap_entity_delete
 Delete an entity.
 
 ### 9. sap_call_function
@@ -284,7 +284,7 @@ src/
 
 #### **Connection Refused (Network Error)**
 - Verify SAP system is running and accessible
-- Check hostname/port in SAP_ODATA_BASE_URL
+- Check hostname/port in SAP_BASE_URL
 - Verify firewall settings allow HTTP/HTTPS traffic
 
 #### **401 Unauthorized**

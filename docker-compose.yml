@@ -1,0 +1,22 @@
+services:
+  sap-mcp:
+    build:
+      context: .
+      dockerfile: ./hub/node/Dockerfile.local
+    command: 'tail -f /dev/null'
+    container_name: sap-mcp
+    env_file:
+      - ./app/.env.dev
+    networks:
+      shared_sapot_net:
+        aliases:
+          - sapmcp.blas.local
+    ports:
+      - '3001:3001'
+    volumes:
+      - ./app:/home/app
+
+networks:
+  shared_sapot_net:
+    name: da-orb_da_sapot_net
+    external: true
