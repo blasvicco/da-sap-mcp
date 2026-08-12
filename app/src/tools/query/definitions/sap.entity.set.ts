@@ -11,9 +11,13 @@ export const sap_query_entity_set: Tool = {
     "SAP B1 item records embed large nested collections that will exceed token limits if you omit select. " +
     "For Items ALWAYS use: select=[\"ItemCode\",\"ItemName\",\"ItemsGroupCode\"] (add other fields as needed) and top≤20. " +
     "CRITICAL — use valid OData filter syntax. Do NOT write 'Field contains value' (invalid). " +
-    "Use substringof('term',Field) for partial matches. " +
+    "Comparison operators: eq, ne, gt, ge, lt, le. Logical operators: and, or, not. " +
+    "NOTE: 'not' requires SAP B1 9.1 patch level 01+ — it may fail with HTTP 400 on older instances. " +
+    "String functions: substringof('term',Field) (contains), startswith(Field,'term'), endswith(Field,'term'). " +
     "OR across terms: substringof('a',Field) or substringof('b',Field). " +
-    "Combined: (substringof('a',Field) or substringof('b',Field)) and OtherField eq value.",
+    "Combined: (substringof('a',Field) or substringof('b',Field)) and OtherField eq value. " +
+    "Negation wraps an expression, it is not its own function — do NOT invent syntax like notcontains(...). " +
+    "Example: not startswith(CardName,'NO USAR').",
   inputSchema: {
     type: "object",
     properties: {
@@ -43,13 +47,19 @@ export const sap_query_entity_set: Tool = {
         description:
           "OData $filter expression — must use valid OData syntax. " +
           "NEVER write 'Field contains value' (not valid OData). " +
-          "Use substringof('term',Field) for substring matching. " +
+          "Comparison: eq, ne, gt, ge, lt, le. Logical: and, or, not " +
+          "(NOTE: 'not' requires SAP B1 9.1 patch level 01+ — may fail with HTTP 400 on older instances). " +
+          "String functions: substringof('term',Field) for substring matching (contains), " +
+          "startswith(Field,'term'), endswith(Field,'term'). " +
           "For multiple terms on one field use OR: substringof('termA',Field) or substringof('termB',Field). " +
           "For combined conditions use AND: (substringof('termA',Field) or substringof('termB',Field)) and OtherField eq value. " +
+          "'not' wraps an existing expression rather than being its own function — do NOT invent syntax like notcontains(...). " +
           "Examples: " +
           "single term → substringof('transporte',ItemName); " +
           "two terms → substringof('transporte',ItemName) or substringof('flete',ItemName); " +
-          "with group filter → (substringof('transporte',ItemName) or substringof('flete',ItemName)) and ItemsGroupCode eq 150.",
+          "with group filter → (substringof('transporte',ItemName) or substringof('flete',ItemName)) and ItemsGroupCode eq 150; " +
+          "name doesn't start with X → not startswith(CardName,'NO USAR'); " +
+          "group filter with exclusion → GroupCode eq 100 and not startswith(CardName,'NO USAR').",
       },
       orderby: { type: "string", description: "OData orderby expression" },
       top: {
