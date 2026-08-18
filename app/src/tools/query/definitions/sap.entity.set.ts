@@ -17,7 +17,11 @@ export const sap_query_entity_set: Tool = {
     "OR across terms: substringof('a',Field) or substringof('b',Field). " +
     "Combined: (substringof('a',Field) or substringof('b',Field)) and OtherField eq value. " +
     "Negation wraps an expression, it is not its own function — do NOT invent syntax like notcontains(...). " +
-    "Example: not startswith(CardName,'NO USAR').",
+    "Example: not startswith(CardName,'NO USAR'). " +
+    "CRITICAL — do NOT use tolower()/toupper() in filter. This SAP instance rejects them with HTTP 400 " +
+    "('Property tolower/toupper ... is invalid') — a documented SAP B1 Service Layer limitation. " +
+    "They are also unnecessary: string comparisons in $filter (substringof, startswith, endswith, eq, ne) are " +
+    "already case-insensitive by default on this connection.",
   inputSchema: {
     type: "object",
     properties: {
@@ -59,7 +63,9 @@ export const sap_query_entity_set: Tool = {
           "two terms → substringof('transporte',ItemName) or substringof('flete',ItemName); " +
           "with group filter → (substringof('transporte',ItemName) or substringof('flete',ItemName)) and ItemsGroupCode eq 150; " +
           "name doesn't start with X → not startswith(CardName,'NO USAR'); " +
-          "group filter with exclusion → GroupCode eq 100 and not startswith(CardName,'NO USAR').",
+          "group filter with exclusion → GroupCode eq 100 and not startswith(CardName,'NO USAR'). " +
+          "Do NOT use tolower()/toupper() — this SAP instance returns HTTP 400 for those, and they're unnecessary " +
+          "anyway since $filter comparisons are already case-insensitive by default on this connection.",
       },
       orderby: { type: "string", description: "OData orderby expression" },
       top: {

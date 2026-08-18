@@ -192,7 +192,7 @@ Query an entity set with filtering, sorting, pagination, and expand.
 
 - `serviceName`, `entitySet` (required — same B1S convention as above)
 - `select` (string[]) — fields to return; strongly recommended to avoid token bloat (invalid fields are stripped with a warning)
-- `filter` — OData `$filter` expression, e.g. `substringof('term',Field)` (not `Field contains value`, which is invalid OData)
+- `filter` — OData `$filter` expression, e.g. `substringof('term',Field)` (not `Field contains value`, which is invalid OData). Do not use `tolower()`/`toupper()` — SAP B1 Service Layer rejects them with HTTP 400 (SAP KBA 3522281), and they're unnecessary anyway: on `b1s` connections, every query sends the `B1S-CaseInsensitive: true` request header, so `$filter` string comparisons are already case-insensitive by default. No-op on non-`b1s` connections (harmless there too, e.g. SQL-Server-backed company DBs are already case-insensitive by collation).
 - `orderby`, `top`, `skip`, `expand` (string[]) — navigation properties to expand
 - `connection` (optional)
 

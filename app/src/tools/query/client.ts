@@ -1,4 +1,5 @@
 // App imports
+import { CDriverB1S } from "@/auth";
 import { ABaseClient } from "@/base.client";
 import { ODataQueryOptions } from "@/odata.types";
 
@@ -78,7 +79,15 @@ export class CQuery extends ABaseClient {
       const resolvedEntitySet = !trimmedEntitySet || trimmedEntitySet === serviceName ? "" : trimmedEntitySet;
       const basePath = [serviceName, resolvedEntitySet].filter(Boolean).join("/");
       const url = `${basePath}${queryString ? "?" + queryString : ""}`;
-      const response = await this.httpClient.get(url);
+
+      // Always request case-insensitive comparisons on B1S: it rejects tolower()/toupper() outright (HTTP 400),
+      // so this per-request header is the only way to get case-insensitive filtering. Harmless on SQL-Server-backed
+      // company DBs (already case-insensitive by collation); needed on HANA-backed DBs (case-sensitive by default).
+      const headers = this.authDriver instanceof CDriverB1S
+        ? { "B1S-CaseInsensitive": "true" }
+        : undefined;
+
+      const response = await this.httpClient.get(url, { headers });
       return response.data;
     } catch (error) {
       throw new Error(

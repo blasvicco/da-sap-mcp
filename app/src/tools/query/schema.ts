@@ -47,7 +47,9 @@ export const SQueryEntitySet = zod.object({
       "OData $filter expression. Comparison: eq, ne, gt, ge, lt, le. Logical: and, or, not " +
         "('not' requires SAP B1 9.1 patch level 01+). " +
         "String functions: substringof('term',Field) (contains), startswith(Field,'term'), endswith(Field,'term'). " +
-        "'not' wraps an expression rather than being its own function, e.g. not startswith(CardName,'NO USAR').",
+        "'not' wraps an expression rather than being its own function, e.g. not startswith(CardName,'NO USAR'). " +
+        "Do NOT use tolower()/toupper() — this SAP instance returns HTTP 400 for those, and string comparisons " +
+        "in $filter are already case-insensitive by default, so they're unnecessary anyway.",
     ),
   orderby: zod.string().nullish().describe("OData orderby expression"),
   select: zod.array(zod.string()).nullish().describe("Fields to select"),
