@@ -68,6 +68,7 @@ export class HEntity extends ABaseHandler {
         args.serviceName,
         args.entitySet,
         args.keyValues as Record<string, string | number>,
+        args.expand,
       );
 
       let responseText = `SAP OData Entity from ${args.serviceName}/${args.entitySet}:\n\n`;

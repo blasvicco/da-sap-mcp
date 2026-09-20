@@ -7,6 +7,7 @@ export class CQuery extends ABaseClient {
   async callFunction(
     serviceName: string,
     functionName: string,
+    entityKey?: string | number,
     parameters: Record<string, unknown> = {},
   ): Promise<unknown> {
     this._ensureConnected();
@@ -18,7 +19,10 @@ export class CQuery extends ABaseClient {
       );
 
       const queryString = params.toString().replace(/\+/g, '%20');
-      const basePath = serviceName ? `${serviceName}/${functionName}` : functionName;
+      const servicePath = entityKey != null
+        ? `${serviceName}(${this.__formatEntityKey(entityKey)})`
+        : serviceName;
+      const basePath = servicePath ? `${servicePath}/${functionName}` : functionName;
       const url = `${basePath}${queryString ? "?" + queryString : ""}`;
       const response = await this.httpClient.get(url);
       return response.data;
@@ -94,5 +98,11 @@ export class CQuery extends ABaseClient {
         `Failed to query entity set ${entitySet}: ${this._errorMessage(error)}`,
       );
     }
+  }
+
+  private __formatEntityKey(entityKey: string | number): string {
+    return typeof entityKey === "number"
+      ? String(entityKey)
+      : `'${encodeURIComponent(entityKey)}'`;
   }
 }

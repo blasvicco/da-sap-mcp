@@ -45,6 +45,10 @@ export const SEntityGet = zod.object({
     .record(zod.unknown())
     .describe("Key-value pairs for entity keys"),
   serviceName: serviceNameField,
+  expand: zod
+    .array(zod.string())
+    .optional()
+    .describe("Navigation properties to expand (e.g. [\"BusinessPartner\"])"),
   connection: connectionField,
 });
 

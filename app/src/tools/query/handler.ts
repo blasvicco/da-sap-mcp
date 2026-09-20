@@ -17,10 +17,14 @@ export class HQuery extends ABaseHandler {
       const result = await this._client.callFunction(
         args.serviceName,
         args.functionName,
+        args.entityKey,
         args.parameters ?? {},
       );
 
-      let responseText = `SAP OData Function Result for ${args.serviceName}/${args.functionName}:\n\n`;
+      const functionLabel = args.entityKey != null
+        ? `${args.serviceName}('${args.entityKey}')/${args.functionName}`
+        : `${args.serviceName}/${args.functionName}`;
+      let responseText = `SAP OData Function Result for ${functionLabel}:\n\n`;
 
       if (args.parameters && Object.keys(args.parameters).length > 0) {
         responseText += `Parameters: ${JSON.stringify(args.parameters, null, 2)}\n\n`;

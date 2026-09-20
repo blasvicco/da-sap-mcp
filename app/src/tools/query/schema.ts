@@ -25,6 +25,16 @@ const entitySetField = zod
   );
 
 export const SQueryCallFunction = zod.object({
+  entityKey: zod
+    .union([zod.string(), zod.number()])
+    .optional()
+    .describe(
+      "Primary key binding this call to a specific entity instance. When set, the URL becomes " +
+        "serviceName('entityKey')/functionName instead of serviceName/functionName. Use for OData functions " +
+        "bound to an entity key (e.g. SAP B1S SQLQueries('MyQueryCode')/List). This is a URL path segment, " +
+        "distinct from 'parameters' below (which are sent as query-string arguments). Omit for plain " +
+        "service-level functions.",
+    ),
   functionName: zod.string().describe("Name of the function to call"),
   parameters: zod
     .record(zod.unknown())

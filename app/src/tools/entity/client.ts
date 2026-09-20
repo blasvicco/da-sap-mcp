@@ -38,13 +38,22 @@ export class CEntity extends ABaseClient {
     serviceName: string,
     entitySet: string,
     keyValues: Record<string, string | number>,
+    expand?: string[],
   ): Promise<unknown> {
     this._ensureConnected();
 
     try {
       const keyString = this.__buildKeyString(keyValues);
       const basePath = [serviceName, entitySet].filter(Boolean).join("/");
-      const response = await this.httpClient.get(`${basePath}(${keyString})`);
+
+      const params = new URLSearchParams();
+      if (expand?.length) {
+        params.append("$expand", expand.join(","));
+      }
+      const queryString = params.toString().replace(/\+/g, '%20');
+      const url = `${basePath}(${keyString})${queryString ? "?" + queryString : ""}`;
+
+      const response = await this.httpClient.get(url);
       return response.data;
     } catch (error) {
       throw new Error(`Failed to get entity: ${this._errorMessage(error)}`);

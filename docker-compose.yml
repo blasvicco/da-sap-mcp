@@ -8,7 +8,7 @@ services:
     env_file:
       - ./app/.env.dev
     networks:
-      shared_sapot_net:
+      shared_orb_net:
         aliases:
           - sapmcp.blas.local
     ports:
@@ -17,6 +17,6 @@ services:
       - ./app:/home/app
 
 networks:
-  shared_sapot_net:
-    name: da-orb_da_sapot_net
+  shared_orb_net:
+    name: da-orb_da_orb_net
     external: true
